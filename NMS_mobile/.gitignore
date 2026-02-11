@@ -42,6 +42,7 @@ app-example
 /ios
 /android
 --port/
+.expo/
 .idea/
 .vscode
 assets/
