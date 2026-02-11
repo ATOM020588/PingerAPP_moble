@@ -47,8 +47,6 @@ app-example
 .vscode
 assets/
 components/
-constants/
-context/
 hooks/
 node_modules/
 scripts/
