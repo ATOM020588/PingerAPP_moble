@@ -41,3 +41,19 @@ app-example
 # generated native folders
 /ios
 /android
+--port/
+.idea/
+.vscode
+assets/
+components/
+constants/
+context/
+hooks/
+node_modules/
+scripts/
+app.json
+eslint.config.js
+package-lock.json
+package.json
+README.md
+tsconfig.json
