@@ -214,7 +214,7 @@ export default function MainScreen() {
             key={item.id}
             style={[styles.menuButton, item.disabled && styles.menuButtonDisabled]}
             onPress={() => handleMenuPress(item)}
-            activeOpacity={0.7}
+            activeOpacity={1}
           >
             <Text style={[styles.menuButtonText, item.disabled && styles.menuButtonTextDisabled]}>
               {item.title}
