@@ -35,7 +35,7 @@ export default function LoginScreen() {
   const hasLoadedCredentials = useRef(false);
 
   useEffect(() => {
-    // Load saved credentials on mount
+    // Load saved username on mount (password is never saved)
     const loadSaved = async () => {
       if (hasLoadedCredentials.current) return;
       hasLoadedCredentials.current = true;
@@ -43,7 +43,7 @@ export default function LoginScreen() {
       const creds = await loadCredentials();
       if (creds && creds.remember) {
         setLogin(creds.login);
-        setPassword('********'); // Placeholder for saved password
+        // Password is never saved - user must enter it each time
         setRememberMe(true);
       }
     };
@@ -86,20 +86,8 @@ export default function LoginScreen() {
     setStatusMessage('Авторизация...');
 
     try {
-      // Hash password (or use stored hash if password is placeholder)
-      let passwordHash: string;
-      if (password === '********') {
-        const creds = await loadCredentials();
-        if (creds) {
-          passwordHash = creds.passwordHash;
-        } else {
-          Alert.alert('Ошибка', 'Сохраненный пароль не найден');
-          setIsLoggingIn(false);
-          return;
-        }
-      } else {
-        passwordHash = await hashPassword(password);
-      }
+      // Always hash the entered password (password is never saved)
+      const passwordHash = await hashPassword(password);
 
       // Send login request
       const response = await sendRequest('auth_login', {
@@ -108,8 +96,8 @@ export default function LoginScreen() {
       });
 
       if (response.success) {
-        // Save credentials if remember me is checked
-        await saveCredentials(login.trim(), passwordHash, rememberMe);
+        // Save only username if remember me is checked (never save password)
+        await saveCredentials(login.trim(), '', rememberMe);
 
         // Set user data
         setUser({

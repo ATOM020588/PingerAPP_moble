@@ -1,35 +1,7 @@
-import React, { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '../context/AuthContext';
-import { COLORS } from '../constants/theme';
+import React from 'react';
+import { Redirect } from 'expo-router';
 
 export default function Index() {
-  const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
-
-  useEffect(() => {
-    if (!isLoading) {
-      if (isAuthenticated) {
-        router.replace('/main');
-      } else {
-        router.replace('/login');
-      }
-    }
-  }, [isAuthenticated, isLoading]);
-
-  return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color={COLORS.primary} />
-    </View>
-  );
+  // Always redirect to login on app start
+  return <Redirect href="/login" />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

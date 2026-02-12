@@ -17,6 +17,7 @@ import Svg, {
   Image as SvgImage,
   Line,
   Rect,
+  TSpan,
   Text as SvgText,
 } from 'react-native-svg';
 import { COLORS } from '../constants/theme';
@@ -121,7 +122,7 @@ interface MapData {
 }
 
 const ICON_SIZE = 50;
-const OVERLAY_SIZE = 10;
+const OVERLAY_SIZE = 15;
 const NODE_COLORS = {
   switch_online: '#00aa00',
   switch_offline: '#aa0000',
@@ -141,7 +142,6 @@ export default function CanvasScreen() {
   const [mapData, setMapData] = useState<MapData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState('Загрузка карты...');
-  const [scale, setScale] = useState(1);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const screenWidth = Dimensions.get('window').width;
@@ -191,6 +191,38 @@ export default function CanvasScreen() {
       setIsLoading(false);
     }
   };
+  /* Перенос строк в подписях оборудоваия */
+  const renderMultilineText = (
+    text: string,
+    x: number,
+    y: number,
+    fontSize: number,
+    fill: string,
+    lineHeight = fontSize + 2
+  ) => {
+    const lines = text.split('\n');
+
+    return (
+      <SvgText
+        x={x}
+        y={y}
+        fontSize={fontSize}
+        fontWeight="bold"
+        fill={fill}
+        textAnchor="middle"
+      >
+        {lines.map((line, index) => (
+          <TSpan
+            key={index}
+            x={x}
+            dy={index === 0 ? 0 : lineHeight}
+          >
+            {line}
+          </TSpan>
+        ))}
+      </SvgText>
+    );
+  };
 
   // Парсинг промежуточных точек магистрали
   const parseNodes = (nodesStr?: string): [number, number][] => {
@@ -229,46 +261,6 @@ export default function CanvasScreen() {
       return NODE_COLORS.switch_offline;
     }
     return NODE_COLORS.switch_online;
-  };
-
-  // Рендер легенды
-  const renderLegend = (legend: Legend) => {
-    const x = legend.xy.x;
-    const y = legend.xy.y;
-    const w = parseFloat(String(legend.width || 100));
-    const h = parseFloat(String(legend.height || 50));
-    const borderColor = legend.bordercolor || '#000';
-    const borderWidth = parseFloat(String(legend.borderwidth || 2));
-    const fillColor = legend.zalivka === '0' ? 'transparent' : (legend.zalivkacolor || '#fff');
-    const textColor = legend.textcolor || '#000';
-    const textSize = parseInt(String(legend.textsize || 14));
-    const text = legend.name || legend.text || '';
-
-    return (
-      <G key={`legend-${legend.id}`}>
-        <Rect
-          x={x}
-          y={y}
-          width={w}
-          height={h}
-          fill={fillColor}
-          stroke={borderColor}
-          strokeWidth={borderWidth}
-        />
-        {text && (
-          <SvgText
-            x={x + w / 2}
-            y={y + h / 2 + textSize / 3}
-            fontSize={textSize}
-            fontWeight="bold"
-            fill={textColor}
-            textAnchor="middle"
-          >
-            {text}
-          </SvgText>
-        )}
-      </G>
-    );
   };
 
   // Рендер магистрали
@@ -384,12 +376,11 @@ export default function CanvasScreen() {
 
   // Выбор иконки для свитча в зависимости от статуса
   const getSwitchIcon = (node: SwitchNode) => {
-    if (node.notinstalled === '-1') return ICONS.not_install;
-    if (node.notsettings === '-1') return ICONS.not_settings;
-    if (node.copyid && node.copyid !== 'none' && node.copyid !== '') return ICONS.copy;
+    // основная иконка всегда свитч/роутер
     if (node.pingok === false || String(node.pingok).toLowerCase() === 'false') {
       return ICONS.router_off;
     }
+
     return ICONS.router;
   };
 
@@ -398,7 +389,7 @@ export default function CanvasScreen() {
     const x = node.xy.x;
     const y = node.xy.y;
     const icon = getSwitchIcon(node);
-    
+
     return {
       id: `switch-${node.id}`,
       type: 'switch',
@@ -421,7 +412,9 @@ export default function CanvasScreen() {
     // Индикатор mayakup
     let mayakIndicator = null;
     if (node.mayakup !== undefined) {
-      const isUp = node.mayakup === true || String(node.mayakup).toLowerCase() === 'true';
+      const isUp =
+        node.mayakup === true || String(node.mayakup).toLowerCase() === 'true';
+
       mayakIndicator = (
         <Circle
           cx={x}
@@ -437,17 +430,15 @@ export default function CanvasScreen() {
     return (
       <G key={`switch-${node.id}`}>
         {mayakIndicator}
-        {/* Подпись */}
-        <SvgText
-          x={x}
-          y={y + halfSize + 14}
-          fontSize={12}
-          fontWeight="bold"
-          fill="#dbdbdb"
-          textAnchor="middle"
-        >
-          {node.name || 'Свитч'}
-        </SvgText>
+
+        {/* Подпись с переносами */}
+        {renderMultilineText(
+          node.name || 'Свитч',
+          x,
+          y + halfSize + 0,
+          12,
+          '#dbdbdb'
+        )}
       </G>
     );
   };
@@ -456,7 +447,7 @@ export default function CanvasScreen() {
   const renderPlanSwitchOverlay = (node: PlanSwitchNode) => {
     const x = node.xy.x;
     const y = node.xy.y;
-    
+
     return {
       id: `plan-${node.id}`,
       type: 'plan_switch',
@@ -495,7 +486,7 @@ export default function CanvasScreen() {
   const renderUserOverlay = (node: UserNode) => {
     const x = node.xy.x;
     const y = node.xy.y;
-    
+
     return {
       id: `user-${node.id}`,
       type: 'user',
@@ -534,7 +525,7 @@ export default function CanvasScreen() {
   const renderSoapOverlay = (node: SoapNode) => {
     const x = node.xy.x;
     const y = node.xy.y;
-    
+
     return {
       id: `soap-${node.id}`,
       type: 'soap',
@@ -569,28 +560,61 @@ export default function CanvasScreen() {
     );
   };
 
+  const getSwitchStatusOverlayIcon = (node: SwitchNode) => {
+    if (node.notinstalled === '-1') return ICONS.not_install;
+    if (node.notsettings === '-1') return ICONS.not_settings;
+    if (node.copyid && node.copyid !== 'none' && node.copyid !== '') return ICONS.copy;
+
+    return null;
+  };
+
+  const renderSwitchStatusOverlay = (node: SwitchNode) => {
+    const x = node.xy.x;
+    const y = node.xy.y;
+
+    const statusIcon = getSwitchStatusOverlayIcon(node);
+    if (!statusIcon) return null;
+
+    const padding = 0;          // отступ слева
+    const offsetY = 10;         // смещение вниз от верхнего края
+
+    return {
+      id: `switch-status-${node.id}`,
+      type: 'status',
+      x: x - ICON_SIZE / 2 + padding,
+      y: y - ICON_SIZE / 2 + offsetY,
+      icon: statusIcon,
+      size: OVERLAY_SIZE,
+    };
+  };
+
   // Собираем все overlay элементы
   const getOverlayItems = () => {
     if (!mapData) return [];
-    
+
     const items: any[] = [];
-    
+
     mapData.switches?.forEach((node) => {
+      // основная большая иконка
       items.push(renderSwitchOverlay(node));
+
+      // маленький статусный значок
+      const statusOverlay = renderSwitchStatusOverlay(node);
+      if (statusOverlay) items.push(statusOverlay);
     });
-    
+
     mapData.plan_switches?.forEach((node) => {
       items.push(renderPlanSwitchOverlay(node));
     });
-    
+
     mapData.users?.forEach((node) => {
       items.push(renderUserOverlay(node));
     });
-    
+
     mapData.soaps?.forEach((node) => {
       items.push(renderSoapOverlay(node));
     });
-    
+
     return items;
   };
 
@@ -603,18 +627,15 @@ export default function CanvasScreen() {
     const overlayItems = getOverlayItems();
 
     return (
-      <View style={{ width: mapWidth * scale, height: mapHeight * scale }}>
+      <View style={{ width: mapWidth, height: mapHeight }}>
         <Svg
-          width={mapWidth * scale}
-          height={mapHeight * scale}
+          width={mapWidth}
+          height={mapHeight}
           viewBox={`0 0 ${mapWidth} ${mapHeight}`}
           style={{ position: 'absolute', top: 0, left: 0 }}
         >
           {/* Фон */}
           <Rect x={0} y={0} width={mapWidth} height={mapHeight} fill="#008080" />
-
-          {/* Легенды (на заднем плане) */}
-          {mapData.legends?.map((legend) => renderLegend(legend))}
 
           {/* Магистрали */}
           {mapData.magistrals?.map((mag) => renderMagistral(mag))}
@@ -631,7 +652,7 @@ export default function CanvasScreen() {
           {/* Подписи мыльниц */}
           {mapData.soaps?.map((node) => renderSoap(node))}
         </Svg>
-        
+
         {/* Изображения поверх SVG */}
         {overlayItems.map((item) => (
           <Image
@@ -639,10 +660,10 @@ export default function CanvasScreen() {
             source={item.icon}
             style={{
               position: 'absolute',
-              left: item.x * scale,
-              top: item.y * scale,
-              width: ICON_SIZE * scale,
-              height: ICON_SIZE * scale,
+              left: item.x,
+              top: item.y,
+              width: item.size ? item.size : ICON_SIZE,
+              height: item.size ? item.size : ICON_SIZE,
             }}
             resizeMode="contain"
           />
@@ -663,21 +684,7 @@ export default function CanvasScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {mapName}
         </Text>
-        <View style={styles.headerRight}>
-          {/* Кнопки масштаба */}
-          <TouchableOpacity
-            style={styles.zoomButton}
-            onPress={() => setScale(Math.max(0.3, scale - 0.2))}
-          >
-            <Text style={styles.zoomText}>−</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.zoomButton}
-            onPress={() => setScale(Math.min(3, scale + 0.2))}
-          >
-            <Text style={styles.zoomText}>+</Text>
-          </TouchableOpacity>
-        </View>
+        <View style={styles.headerRight} />
       </View>
 
       {/* Canvas */}
@@ -693,8 +700,6 @@ export default function CanvasScreen() {
           horizontal
           showsHorizontalScrollIndicator={true}
           showsVerticalScrollIndicator={true}
-          maximumZoomScale={3}
-          minimumZoomScale={0.3}
           contentContainerStyle={styles.canvasContent}
         >
           <ScrollView
@@ -711,7 +716,6 @@ export default function CanvasScreen() {
       <View style={styles.statusBar}>
         <View style={[styles.statusIndicator, isConnected ? styles.statusConnected : styles.statusDisconnected]} />
         <Text style={styles.statusText}>{statusMessage}</Text>
-        <Text style={styles.scaleText}>Масштаб: {Math.round(scale * 100)}%</Text>
       </View>
     </SafeAreaView>
   );
@@ -752,20 +756,7 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  zoomButton: {
-    width: 36,
-    height: 36,
-    backgroundColor: '#333',
-    borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  zoomText: {
-    color: COLORS.textWhite,
-    fontSize: 20,
-    fontWeight: 'bold',
+    width: 80,
   },
   loadingContainer: {
     flex: 1,
@@ -812,10 +803,5 @@ const styles = StyleSheet.create({
     color: COLORS.textGray,
     fontSize: 14,
     flex: 1,
-  },
-  scaleText: {
-    color: COLORS.textGray,
-    fontSize: 12,
-    marginLeft: 12,
   },
 });
