@@ -123,6 +123,9 @@ interface MapData {
 
 const ICON_SIZE = 50;
 const OVERLAY_SIZE = 15;
+// Отступы рамки выделения от объекта (можно настраивать отдельно)
+const FOCUS_PADDING_X = 6; // Отступ по горизонтали (влево и вправо)
+const FOCUS_PADDING_Y = -8; // Отступ по вертикали (вверх и вниз)
 const NODE_COLORS = {
   switch_online: '#00aa00',
   switch_offline: '#aa0000',
@@ -136,13 +139,21 @@ const NODE_COLORS = {
 
 export default function CanvasScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ mapPath: string; mapName: string }>();
+  const params = useLocalSearchParams<{
+    mapPath: string;
+    mapName: string;
+    focusNodeId?: string;
+    focusX?: string;
+    focusY?: string;
+  }>();
   const { isConnected, sendRequest, addConnectionHandler } = useWebSocketContext();
 
   const [mapData, setMapData] = useState<MapData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState('Загрузка карты...');
-  const scrollViewRef = useRef<ScrollView>(null);
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+  const horizontalScrollRef = useRef<ScrollView>(null);
+  const verticalScrollRef = useRef<ScrollView>(null);
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
@@ -164,6 +175,44 @@ export default function CanvasScreen() {
       removeHandler();
     };
   }, [params.mapPath]);
+
+  // Центрирование и выделение объекта при переходе из поиска
+  useEffect(() => {
+    if (!mapData || isLoading) return;
+
+    if (params.focusNodeId) {
+      setFocusedNodeId(params.focusNodeId);
+
+      // Центрируем на объекте
+      const focusX = parseFloat(params.focusX || '0');
+      const focusY = parseFloat(params.focusY || '0');
+
+      if (focusX > 0 || focusY > 0) {
+        // Задержка для того чтобы ScrollView успел отрендериться
+        setTimeout(() => {
+          // Вычисляем смещение для центрирования объекта на экране
+          // Учитываем header и status bar (примерно 100px)
+          const visibleHeight = screenHeight - 100;
+          const offsetX = Math.max(0, focusX - screenWidth / 2);
+          const offsetY = Math.max(0, focusY - visibleHeight / 2);
+
+          console.log('Focus scroll to:', { offsetX, offsetY, focusX, focusY });
+
+          // Скроллим горизонтальный ScrollView
+          horizontalScrollRef.current?.scrollTo({ x: offsetX, animated: true });
+          // Скроллим вертикальный ScrollView
+          verticalScrollRef.current?.scrollTo({ y: offsetY, animated: true });
+        }, 500);
+      }
+
+      // Убираем выделение через 5 секунд
+      const timer = setTimeout(() => {
+        setFocusedNodeId(null);
+      }, 10000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [mapData, isLoading, params.focusNodeId]);
 
   const loadMap = async () => {
     if (!params.mapPath) return;
@@ -392,6 +441,7 @@ export default function CanvasScreen() {
 
     return {
       id: `switch-${node.id}`,
+      nodeId: node.id,
       type: 'switch',
       x: x - ICON_SIZE / 2,
       y: y - ICON_SIZE / 2,
@@ -403,39 +453,39 @@ export default function CanvasScreen() {
     };
   };
 
-  // Рендер свитча в SVG (только подпись и mayak индикатор)
+  // Рендер индикатора маяка как overlay (на переднем плане)
+  const renderMayakOverlay = (node: SwitchNode) => {
+    // Показываем маяк только если mayakup определен
+    if (node.mayakup === undefined) return null;
+
+    const x = node.xy.x;
+    const y = node.xy.y;
+    
+    // Цвет маяка зависит от pingok: true - зеленый, false - красный
+    const isUp = node.pingok === true || String(node.pingok).toLowerCase() === 'true';
+
+    return {
+      id: `mayak-${node.id}`,
+      type: 'mayak',
+      x: x,
+      y: y,
+      isUp: isUp,
+    };
+  };
+
+  // Рендер свитча в SVG (только подпись, БЕЗ mayak индикатора)
   const renderSwitch = (node: SwitchNode) => {
     const x = node.xy.x;
     const y = node.xy.y;
     const halfSize = ICON_SIZE / 2;
 
-    // Индикатор mayakup
-    let mayakIndicator = null;
-    if (node.mayakup !== undefined) {
-      const isUp =
-        node.mayakup === true || String(node.mayakup).toLowerCase() === 'true';
-
-      mayakIndicator = (
-        <Circle
-          cx={x}
-          cy={y}
-          r={5}
-          fill={isUp ? '#00ff00' : '#ff0000'}
-          stroke="#000"
-          strokeWidth={1}
-        />
-      );
-    }
-
     return (
       <G key={`switch-${node.id}`}>
-        {mayakIndicator}
-
         {/* Подпись с переносами */}
         {renderMultilineText(
           node.name || 'Свитч',
           x,
-          y + halfSize + 0,
+          y + halfSize + 4,
           12,
           '#dbdbdb'
         )}
@@ -450,6 +500,7 @@ export default function CanvasScreen() {
 
     return {
       id: `plan-${node.id}`,
+      nodeId: node.id,
       type: 'plan_switch',
       x: x - ICON_SIZE / 2,
       y: y - ICON_SIZE / 2,
@@ -489,6 +540,7 @@ export default function CanvasScreen() {
 
     return {
       id: `user-${node.id}`,
+      nodeId: node.id,
       type: 'user',
       x: x - ICON_SIZE / 2,
       y: y - ICON_SIZE / 2,
@@ -528,6 +580,7 @@ export default function CanvasScreen() {
 
     return {
       id: `soap-${node.id}`,
+      nodeId: node.id,
       type: 'soap',
       x: x - ICON_SIZE / 2,
       y: y - ICON_SIZE / 2,
@@ -601,6 +654,10 @@ export default function CanvasScreen() {
       // маленький статусный значок
       const statusOverlay = renderSwitchStatusOverlay(node);
       if (statusOverlay) items.push(statusOverlay);
+
+      // индикатор маяка (на переднем плане)
+      const mayakOverlay = renderMayakOverlay(node);
+      if (mayakOverlay) items.push(mayakOverlay);
     });
 
     mapData.plan_switches?.forEach((node) => {
@@ -616,6 +673,45 @@ export default function CanvasScreen() {
     });
 
     return items;
+  };
+
+  // Рендер рамки выделения для фокусированного объекта
+  const renderFocusFrame = (nodeId: string) => {
+    if (!mapData || !nodeId) return null;
+
+    // Ищем координаты объекта
+    const allNodes = [
+      ...(mapData.switches || []),
+      ...(mapData.plan_switches || []),
+      ...(mapData.users || []),
+      ...(mapData.soaps || []),
+    ];
+
+    const node = allNodes.find((n) => n.id === nodeId);
+    if (!node || !node.xy) return null;
+
+    const x = node.xy.x;
+    const y = node.xy.y;
+
+    // Размеры рамки с раздельными отступами по X и Y
+    const frameWidth = ICON_SIZE + FOCUS_PADDING_X * 2;
+    const frameHeight = ICON_SIZE + FOCUS_PADDING_Y * 2;
+    const frameX = x - frameWidth / 2;
+    const frameY = y - frameHeight / 2;
+
+    return (
+      <Rect
+        key="focus-frame"
+        x={frameX}
+        y={frameY}
+        width={frameWidth}
+        height={frameHeight}
+        fill="none"
+        stroke="#FFC107"
+        strokeWidth={1.5}
+        strokeDasharray="4,4"
+      />
+    );
   };
 
   // Рендер всей карты
@@ -651,23 +747,67 @@ export default function CanvasScreen() {
 
           {/* Подписи мыльниц */}
           {mapData.soaps?.map((node) => renderSoap(node))}
+
+          {/* Рамка выделения фокусированного объекта */}
+          {focusedNodeId && renderFocusFrame(focusedNodeId)}
         </Svg>
 
         {/* Изображения поверх SVG */}
-        {overlayItems.map((item) => (
-          <Image
-            key={item.id}
-            source={item.icon}
-            style={{
-              position: 'absolute',
-              left: item.x,
-              top: item.y,
-              width: item.size ? item.size : ICON_SIZE,
-              height: item.size ? item.size : ICON_SIZE,
-            }}
-            resizeMode="contain"
-          />
-        ))}
+        {overlayItems.map((item) => {
+          // Рендер маяка как круглого индикатора
+          if (item.type === 'mayak') {
+            return (
+              <View
+                key={item.id}
+                style={{
+                  position: 'absolute',
+                  left: item.x - 5,
+                  top: item.y - 5,
+                  width: 10,
+                  height: 10,
+                  borderRadius: 5,
+                  backgroundColor: item.isUp ? '#00ff00' : '#ff0000',
+                  borderWidth: 1,
+                  borderColor: '#000',
+                }}
+              />
+            );
+          }
+
+          // Рендер обычных изображений с обработкой нажатия
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={{
+                position: 'absolute',
+                left: item.x,
+                top: item.y,
+              }}
+              onPress={() => {
+                // При нажатии на свитч открываем экран с информацией
+                if (item.type === 'switch' && item.nodeId) {
+                  router.push({
+                    pathname: '/switch_info',
+                    params: {
+                      switchId: item.nodeId,
+                      mapPath: params.mapPath,
+                    },
+                  });
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Image
+                source={item.icon}
+                style={{
+                  width: item.size ? item.size : ICON_SIZE,
+                  height: item.size ? item.size : ICON_SIZE,
+                }}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          );
+        })}
       </View>
     );
   };
@@ -695,7 +835,7 @@ export default function CanvasScreen() {
         </View>
       ) : (
         <ScrollView
-          ref={scrollViewRef}
+          ref={horizontalScrollRef}
           style={styles.canvasContainer}
           horizontal
           showsHorizontalScrollIndicator={true}
@@ -703,6 +843,7 @@ export default function CanvasScreen() {
           contentContainerStyle={styles.canvasContent}
         >
           <ScrollView
+            ref={verticalScrollRef}
             nestedScrollEnabled
             showsVerticalScrollIndicator={true}
             contentContainerStyle={styles.canvasInner}

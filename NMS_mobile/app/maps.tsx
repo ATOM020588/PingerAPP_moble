@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
+import { useAuth } from '../context/AuthContext';
 import { useWebSocketContext } from '../context/WebSocketContext';
 
 interface MapItem {
@@ -27,7 +28,11 @@ interface Folder {
 
 export default function MapsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { isConnected, sendRequest, addConnectionHandler } = useWebSocketContext();
+
+  // Check if user has edit_maps permission
+  const canEditMaps = user?.permissions?.edit_maps === true;
 
   const [maps, setMaps] = useState<MapItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -59,25 +64,40 @@ export default function MapsScreen() {
     try {
       setStatusMessage('Загрузка карт...');
 
+      // If user doesn't have edit_maps permission, only show maps from /data/main/
+      const requestFolder = !canEditMaps ? 'main' : (folder || undefined);
+
       // Запрос списка карт с метаданными
       const response = await sendRequest('list_maps_with_metadata', {
-        folder: folder || undefined,
+        folder: requestFolder,
       });
 
       if (response.success) {
-        setMaps(response.maps || []);
-        setStatusMessage(`Найдено карт: ${response.count || 0}`);
+        let mapsList = response.maps || [];
+        
+        // If user doesn't have edit_maps permission, hide 00_Core map
+        if (!canEditMaps) {
+          mapsList = mapsList.filter((map: MapItem) => 
+            !map.filename.startsWith('00_Core') && !map.name.startsWith('00_Core')
+          );
+        }
+        
+        setMaps(mapsList);
+        setStatusMessage(`Найдено карт: ${mapsList.length}`);
       } else {
         setStatusMessage('Ошибка загрузки карт');
         setMaps([]);
       }
 
-      // Также загружаем список папок (если в корне)
-      if (!folder) {
+      // Загружаем список папок только если есть права edit_maps и мы в корне
+      if (canEditMaps && !folder) {
         const foldersResponse = await sendRequest('list_folders');
         if (foldersResponse.success && foldersResponse.folders) {
           setFolders(foldersResponse.folders.map((f: string) => ({ name: f, path: f })));
         }
+      } else {
+        // Без прав edit_maps папки не показываем
+        setFolders([]);
       }
     } catch (error) {
       console.error('Error loading maps:', error);
@@ -107,8 +127,10 @@ export default function MapsScreen() {
 
   const handleMapPress = (map: MapItem) => {
     // Формируем путь к карте
-    const mapPath = currentFolder
-      ? `maps/${currentFolder}/${map.filename}`
+    // Если нет прав edit_maps, карты всегда из папки main
+    const effectiveFolder = !canEditMaps ? 'main' : currentFolder;
+    const mapPath = effectiveFolder
+      ? `maps/${effectiveFolder}/${map.filename}`
       : `maps/${map.filename}`;
 
     router.push({

@@ -50,7 +50,7 @@ export default function MainScreen() {
   const [statusMessage, setStatusMessage] = useState('Подключено');
 
   const menuItems: MenuItem[] = [
-    { id: 'search', title: 'Поиск объектов', disabled: true },
+    { id: 'search', title: 'Поиск объектов', route: '/search' },
     { id: 'globals', title: 'Глобальные неисправности', badge: globalIssuesCount, route: '/globals' },
     { id: 'maps', title: 'Карты', route: '/maps' },
     { id: 'requests', title: 'Заявки', disabled: true },
