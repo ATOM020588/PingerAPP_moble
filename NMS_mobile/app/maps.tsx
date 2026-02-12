@@ -74,7 +74,7 @@ export default function MapsScreen() {
 
       // Также загружаем список папок (если в корне)
       if (!folder) {
-        const foldersResponse = await sendRequest('list_maps');
+        const foldersResponse = await sendRequest('list_folders');
         if (foldersResponse.success && foldersResponse.folders) {
           setFolders(foldersResponse.folders.map((f: string) => ({ name: f, path: f })));
         }
